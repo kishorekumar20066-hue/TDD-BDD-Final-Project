@@ -1,0 +1,68 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: tdd-bdd-pipeline
+spec:
+  workspaces:
+    - name: shared-workspace
+
+  tasks:
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: https://github.com/kishorekumar20066-hue/TDD-BDD-Final-Project
+        - name: revision
+          value: main
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    - name: cleanup
+      taskRef:
+        name: cleanup
+      runAfter:
+        - git-clone
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: flake8-eslint
+      runAfter:
+        - cleanup
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: lint
+            image: python:3.9
+            workingDir: $(workspaces.source.path)
+            script: |
+              pip install flake8
+              flake8 service
+
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: nose-jest
+      taskRef:
+        name: test
+      runAfter:
+        - flake8-eslint
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: buildah
+      taskRef:
+        name: buildah
+      runAfter:
+        - nose-jest
+
+    - name: deploy
+      taskRef:
+        name: openshift-client
+      runAfter:
+        - buildah
